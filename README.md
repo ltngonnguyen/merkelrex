@@ -1,6 +1,6 @@
 # Merkelrex: C++ Orderbook Simulator
 
-![Merkelrex cover](sketch-photos/merkelrex-cover.png)
+![Merkelrex cover](assets/merkelrex-cover.png)
 
 Merkelrex is a C++ orderbook simulator and market-data visualizer built around a simple crypto exchange dataset. It started as coursework, but I wanted to keep improving it because the core problem is useful: load messy orderbook snapshots, model bids and asks, match orders, compute market statistics, and make the result inspectable from a terminal.
 
@@ -34,11 +34,11 @@ The newer matching engine is the backend-focused part of the project. The origin
 
 Candlestick chart from historical ETH/BTC ask data:
 
-![Terminal candlestick chart](sketch-photos/candlestick-chart-demo.png)
+![Terminal candlestick chart](assets/candlestick-chart-demo.png)
 
 Volume graph comparing BTC, DOGE, and ETH volume in USDT terms:
 
-![Terminal volume graph](sketch-photos/volume-graph-demo.png)
+![Terminal volume graph](assets/volume-graph-demo.png)
 
 ## Current Shape
 
