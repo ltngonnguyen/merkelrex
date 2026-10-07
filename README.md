@@ -60,7 +60,7 @@ Volume graph comparing BTC, DOGE, and ETH volume in USDT terms:
 
 ```text
 main.cpp                  Entry point, replay command routing, interactive/TUI modes
-MatchingEngine.*          Limit-order matching engine (price-time priority, fills, cancel)
+MatchingEngine.*          Limit-order matching engine (price-level books, price-time priority, fills, cancel)
 FixedPoint.*              8-decimal fixed-point value type used by the matching engine
 Order.* / Trade.*         Matching-engine domain objects
 sample_orders.csv         Committed replay file, works with zero downloads

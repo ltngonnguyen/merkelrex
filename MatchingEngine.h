@@ -4,8 +4,11 @@
 #include "Trade.h"
 
 #include <cstdint>
+#include <deque>
+#include <functional>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct SubmitResult {
@@ -48,21 +51,23 @@ public:
   const std::vector<Trade> &tradeHistory() const;
 
 private:
+  // Price levels, best price first. Each queue is FIFO so time priority
+  // within a price level falls out of insertion order.
   struct Book {
-    std::vector<Order> bids;
-    std::vector<Order> asks;
+    std::map<FixedPoint, std::deque<Order>, std::greater<FixedPoint>> bids;
+    std::map<FixedPoint, std::deque<Order>> asks;
+  };
+
+  struct OrderLocation {
+    std::string symbol;
+    Side side;
+    FixedPoint price;
   };
 
   std::uint64_t nextOrderId = 1;
   std::uint64_t nextTradeId = 1;
   std::uint64_t nextSequence = 1;
   std::map<std::string, Book> books;
+  std::unordered_map<std::uint64_t, OrderLocation> orderIndex;
   std::vector<Trade> trades;
-
-  static bool cancelFromSide(std::vector<Order> &orders,
-                             std::uint64_t orderId);
-  static bool isBidBetter(const Order &left, const Order &right);
-  static bool isAskBetter(const Order &left, const Order &right);
-  static void aggregateLevel(std::vector<BookLevel> &levels, const Order &order,
-                             std::size_t depth);
 };

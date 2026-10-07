@@ -1,7 +1,7 @@
 #include "MatchingEngine.h"
 
-#include <algorithm>
 #include <stdexcept>
+#include <utility>
 
 SubmitResult MatchingEngine::submitLimitOrder(const std::string &symbol,
                                               Side side, FixedPoint price,
@@ -18,56 +18,67 @@ SubmitResult MatchingEngine::submitLimitOrder(const std::string &symbol,
   Book &book = books[symbol];
 
   if (side == Side::Buy) {
-    std::sort(book.asks.begin(), book.asks.end(), isAskBetter);
-    for (Order &ask : book.asks) {
-      if (incoming.quantity.raw() == 0 || ask.price > incoming.price) {
+    auto levelIt = book.asks.begin();
+    while (incoming.quantity.raw() > 0 && levelIt != book.asks.end() &&
+           levelIt->first <= incoming.price) {
+      std::deque<Order> &queue = levelIt->second;
+      while (!queue.empty() && incoming.quantity.raw() > 0) {
+        Order &ask = queue.front();
+        FixedPoint tradedQuantity = incoming.quantity < ask.quantity
+                                        ? incoming.quantity
+                                        : ask.quantity;
+        trades.push_back(Trade{nextTradeId++, symbol, incoming.id, ask.id,
+                               ask.price, tradedQuantity});
+        result.trades.push_back(trades.back());
+        incoming.quantity -= tradedQuantity;
+        ask.quantity -= tradedQuantity;
+        if (ask.quantity.raw() == 0) {
+          orderIndex.erase(ask.id);
+          queue.pop_front();
+        }
+      }
+      if (queue.empty()) {
+        auto eraseIt = levelIt++;
+        book.asks.erase(eraseIt);
+      } else {
         break;
       }
-
-      FixedPoint tradedQuantity = incoming.quantity < ask.quantity
-                                      ? incoming.quantity
-                                      : ask.quantity;
-      Trade trade{nextTradeId++, symbol, incoming.id, ask.id, ask.price,
-                  tradedQuantity};
-      result.trades.push_back(trade);
-      trades.push_back(trade);
-      incoming.quantity -= tradedQuantity;
-      ask.quantity -= tradedQuantity;
     }
-    book.asks.erase(std::remove_if(book.asks.begin(), book.asks.end(),
-                                   [](const Order &order) {
-                                     return order.quantity.raw() == 0;
-                                   }),
-                    book.asks.end());
     if (incoming.quantity.raw() > 0) {
-      book.bids.push_back(incoming);
-      std::sort(book.bids.begin(), book.bids.end(), isBidBetter);
+      book.bids[incoming.price].push_back(incoming);
+      orderIndex[incoming.id] = OrderLocation{symbol, Side::Buy, incoming.price};
     }
   } else {
-    std::sort(book.bids.begin(), book.bids.end(), isBidBetter);
-    for (Order &bid : book.bids) {
-      if (incoming.quantity.raw() == 0 || bid.price < incoming.price) {
+    auto levelIt = book.bids.begin();
+    while (incoming.quantity.raw() > 0 && levelIt != book.bids.end() &&
+           levelIt->first >= incoming.price) {
+      std::deque<Order> &queue = levelIt->second;
+      while (!queue.empty() && incoming.quantity.raw() > 0) {
+        Order &bid = queue.front();
+        FixedPoint tradedQuantity = incoming.quantity < bid.quantity
+                                        ? incoming.quantity
+                                        : bid.quantity;
+        trades.push_back(Trade{nextTradeId++, symbol, bid.id, incoming.id,
+                               bid.price, tradedQuantity});
+        result.trades.push_back(trades.back());
+        incoming.quantity -= tradedQuantity;
+        bid.quantity -= tradedQuantity;
+        if (bid.quantity.raw() == 0) {
+          orderIndex.erase(bid.id);
+          queue.pop_front();
+        }
+      }
+      if (queue.empty()) {
+        auto eraseIt = levelIt++;
+        book.bids.erase(eraseIt);
+      } else {
         break;
       }
-
-      FixedPoint tradedQuantity = incoming.quantity < bid.quantity
-                                      ? incoming.quantity
-                                      : bid.quantity;
-      Trade trade{nextTradeId++, symbol, bid.id, incoming.id, bid.price,
-                  tradedQuantity};
-      result.trades.push_back(trade);
-      trades.push_back(trade);
-      incoming.quantity -= tradedQuantity;
-      bid.quantity -= tradedQuantity;
     }
-    book.bids.erase(std::remove_if(book.bids.begin(), book.bids.end(),
-                                   [](const Order &order) {
-                                     return order.quantity.raw() == 0;
-                                   }),
-                    book.bids.end());
     if (incoming.quantity.raw() > 0) {
-      book.asks.push_back(incoming);
-      std::sort(book.asks.begin(), book.asks.end(), isAskBetter);
+      book.asks[incoming.price].push_back(incoming);
+      orderIndex[incoming.id] =
+          OrderLocation{symbol, Side::Sell, incoming.price};
     }
   }
 
@@ -76,13 +87,51 @@ SubmitResult MatchingEngine::submitLimitOrder(const std::string &symbol,
 }
 
 bool MatchingEngine::cancelOrder(std::uint64_t orderId) {
-  for (auto &entry : books) {
-    Book &book = entry.second;
-    if (cancelFromSide(book.bids, orderId) || cancelFromSide(book.asks, orderId)) {
-      return true;
+  auto locationIt = orderIndex.find(orderId);
+  if (locationIt == orderIndex.end()) {
+    return false;
+  }
+  const OrderLocation location = locationIt->second;
+
+  auto bookIt = books.find(location.symbol);
+  if (bookIt == books.end()) {
+    orderIndex.erase(locationIt);
+    return false;
+  }
+  Book &book = bookIt->second;
+
+  auto eraseFromQueue = [orderId](std::deque<Order> &queue) {
+    for (auto it = queue.begin(); it != queue.end(); ++it) {
+      if (it->id == orderId) {
+        queue.erase(it);
+        return true;
+      }
+    }
+    return false;
+  };
+
+  if (location.side == Side::Buy) {
+    auto levelIt = book.bids.find(location.price);
+    if (levelIt == book.bids.end() || !eraseFromQueue(levelIt->second)) {
+      orderIndex.erase(locationIt);
+      return false;
+    }
+    if (levelIt->second.empty()) {
+      book.bids.erase(levelIt);
+    }
+  } else {
+    auto levelIt = book.asks.find(location.price);
+    if (levelIt == book.asks.end() || !eraseFromQueue(levelIt->second)) {
+      orderIndex.erase(locationIt);
+      return false;
+    }
+    if (levelIt->second.empty()) {
+      book.asks.erase(levelIt);
     }
   }
-  return false;
+
+  orderIndex.erase(locationIt);
+  return true;
 }
 
 BookSnapshot MatchingEngine::snapshot(const std::string &symbol,
@@ -93,16 +142,25 @@ BookSnapshot MatchingEngine::snapshot(const std::string &symbol,
     return output;
   }
 
-  std::vector<Order> bids = bookIt->second.bids;
-  std::vector<Order> asks = bookIt->second.asks;
-  std::sort(bids.begin(), bids.end(), isBidBetter);
-  std::sort(asks.begin(), asks.end(), isAskBetter);
-
-  for (const Order &bid : bids) {
-    aggregateLevel(output.bids, bid, depth);
+  for (const auto &level : bookIt->second.bids) {
+    if (output.bids.size() >= depth) {
+      break;
+    }
+    FixedPoint total;
+    for (const Order &order : level.second) {
+      total += order.quantity;
+    }
+    output.bids.push_back(BookLevel{level.first, total});
   }
-  for (const Order &ask : asks) {
-    aggregateLevel(output.asks, ask, depth);
+  for (const auto &level : bookIt->second.asks) {
+    if (output.asks.size() >= depth) {
+      break;
+    }
+    FixedPoint total;
+    for (const Order &order : level.second) {
+      total += order.quantity;
+    }
+    output.asks.push_back(BookLevel{level.first, total});
   }
 
   return output;
@@ -146,43 +204,3 @@ BookStats MatchingEngine::stats(const std::string &symbol,
 }
 
 const std::vector<Trade> &MatchingEngine::tradeHistory() const { return trades; }
-
-bool MatchingEngine::cancelFromSide(std::vector<Order> &orders,
-                                    std::uint64_t orderId) {
-  auto orderIt = std::find_if(orders.begin(), orders.end(),
-                              [orderId](const Order &order) {
-                                return order.id == orderId;
-                              });
-  if (orderIt == orders.end()) {
-    return false;
-  }
-  orders.erase(orderIt);
-  return true;
-}
-
-bool MatchingEngine::isBidBetter(const Order &left, const Order &right) {
-  if (left.price != right.price) {
-    return left.price > right.price;
-  }
-  return left.sequence < right.sequence;
-}
-
-bool MatchingEngine::isAskBetter(const Order &left, const Order &right) {
-  if (left.price != right.price) {
-    return left.price < right.price;
-  }
-  return left.sequence < right.sequence;
-}
-
-void MatchingEngine::aggregateLevel(std::vector<BookLevel> &levels,
-                                    const Order &order, std::size_t depth) {
-  for (BookLevel &level : levels) {
-    if (level.price == order.price) {
-      level.quantity += order.quantity;
-      return;
-    }
-  }
-  if (levels.size() < depth) {
-    levels.push_back(BookLevel{order.price, order.quantity});
-  }
-}
