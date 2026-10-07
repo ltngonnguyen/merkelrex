@@ -45,3 +45,7 @@ enable_testing()
 add_executable(orderbook_tests tests/orderbook_tests.cpp)
 target_link_libraries(orderbook_tests PRIVATE orderbook_core)
 add_test(NAME orderbook_tests COMMAND orderbook_tests)
+
+add_executable(matching_benchmark tests/matching_benchmark.cpp)
+target_link_libraries(matching_benchmark PRIVATE orderbook_core)
+add_test(NAME matching_benchmark COMMAND matching_benchmark)

@@ -18,6 +18,43 @@ ctest --test-dir build --output-on-failure
 
 `replay` reads the committed `sample_orders.csv`, submits/cancels orders through the matching engine, prints trades, and shows the final book state. `--json` emits the same run as machine-readable JSON for scripts. The older alias `match-demo` still works.
 
+How the engine works — order lifecycle, price-time priority, why fixed-point, cancel semantics, complexity — is written up in [docs/matching-engine.md](docs/matching-engine.md).
+
+Sample text output (excerpt):
+
+```text
+Accepted order 5: buy 5 ETH/USDT @ 102.00
+  trade 2: 2 ETH/USDT @ 100 (buy 5, sell 1)
+  trade 3: 2 ETH/USDT @ 101 (buy 5, sell 2)
+  remaining quantity 1 rests on book
+...
+ETH/USDT book
+Bids
+  1 @ 102
+Asks
+  (empty)
+Stats
+  best bid: 102
+  best ask: n/a
+  ...
+```
+
+Sample JSON output (excerpt of `replay --json`, reformatted for readability):
+
+```json
+{"inputFile":"sample_orders.csv",
+ "summary":{"accepted":7,"cancelled":1,"skipped":0,"trades":4},
+ "events":[
+   {"type":"order","line":8,"success":true,"orderId":5,"symbol":"ETH/USDT","side":"buy",
+    "price":"102.00","quantity":"5","remainingQuantity":"1",
+    "trades":[
+      {"id":2,"symbol":"ETH/USDT","buyOrderId":5,"sellOrderId":1,"price":"100","quantity":"2"},
+      {"id":3,"symbol":"ETH/USDT","buyOrderId":5,"sellOrderId":2,"price":"101","quantity":"2"}]}],
+ "books":{"ETH/USDT":{"bids":[{"price":"102","quantity":"1"}],"asks":[],
+    "stats":{"bestBid":"102","bestAsk":null,"spread":null,"midPrice":null,
+             "bidDepth":"1","askDepth":"0","imbalance":1}}}}
+```
+
 ## Ways to run it
 
 **Primary: matching-engine replay (backend core).**
@@ -64,7 +101,9 @@ MatchingEngine.*          Limit-order matching engine (price-level books, price-
 FixedPoint.*              8-decimal fixed-point value type used by the matching engine
 Order.* / Trade.*         Matching-engine domain objects
 sample_orders.csv         Committed replay file, works with zero downloads
+docs/matching-engine.md   Matching-engine design notes (lifecycle, priority, fixed-point, complexity)
 tests/orderbook_tests.cpp Small no-dependency C++ test runner
+tests/matching_benchmark.cpp Micro-benchmark: 100k submits, snapshot, 50k-fill sweep
 CSVReader.*               CSV parsing and row validation, Binance bookTicker adapter
 OrderBook.*               Historical market-data storage, filtering, matching, OHLCV logic
 OrderBookEntry.*          Single historical bid/ask/trade row
@@ -109,6 +148,18 @@ Run the tests:
 
 ```bash
 ctest --test-dir build --output-on-failure
+```
+
+Run the matching-engine micro-benchmark (also part of `ctest`; run it directly to see the timings):
+
+```bash
+./build/matching_benchmark
+```
+
+```text
+[benchmark] 100000 limit submits (book build) in 163 ms (611K submits/sec)
+[benchmark] snapshot(depth=10) in 0.066 ms
+[benchmark] aggressive buy sweeping 50000 resting orders in 45 ms (1105K fills/sec)
 ```
 
 Run the legacy interactive menu or fullscreen TUI (both need the Binance zip from the Data section):
@@ -183,13 +234,15 @@ Cancellation only applies to orders that are still resting on the in-memory book
 - CSV validation for malformed rows, unknown sides, and non-positive values.
 - Binance COIN-M futures `bookTicker` zip support.
 - Top-of-book notional graph fallback for one-symbol Binance data.
-- Tests for parsing, time navigation, price aggregation, candlesticks, volume, matching, cancellation, and book stats.
+- Tests for parsing, time navigation, price aggregation, candlesticks, volume, matching, cancellation, book stats, depth truncation, multi-symbol isolation, and empty-book stats.
 - A newer `MatchingEngine` separate from the original menu code.
 - Fixed-point values in the newer matching engine.
 - Price-time-priority matching with partial fills.
 - Order cancellation for resting orders.
 - Book snapshots and simple live stats: best bid, best ask, spread, mid-price, depth, and imbalance.
 - A replay command with text and JSON output.
+- A micro-benchmark for the matching engine: 100k limit submits, a snapshot, and a 50k-fill sweep.
+- Design notes for the matching engine in `docs/matching-engine.md`.
 
 ## What Worked
 
@@ -216,7 +269,6 @@ I am keeping those limitations visible because they are true. This is not meant 
 - Better chart aggregation for high-frequency Binance bookTicker data.
 - Support for Binance klines after bookTicker is stable.
 - JSON output for the historical market stats and candle path.
-- More tests around edge cases in the matching engine.
 - A small REST API, if I decide it is worth adding instead of keeping this as a terminal-first project.
 - Terminal recordings of the chart output.
 

@@ -273,6 +273,80 @@ void testMatchingEngineRejectsMissingAndFilledCancellation() {
   require(!engine.cancelOrder(999), "Missing order should not be cancellable");
 }
 
+void testMatchingEngineSnapshotTruncatesDepth() {
+  MatchingEngine engine;
+  for (int i = 0; i < 5; ++i) {
+    engine.submitLimitOrder("ETH/USDT", Side::Buy,
+                            FixedPoint::fromString(std::to_string(99 - i)),
+                            FixedPoint::fromString("1"));
+    engine.submitLimitOrder("ETH/USDT", Side::Sell,
+                            FixedPoint::fromString(std::to_string(101 + i)),
+                            FixedPoint::fromString("1"));
+  }
+
+  BookSnapshot book = engine.snapshot("ETH/USDT", 2);
+  require(book.bids.size() == 2, "Snapshot should truncate bid depth");
+  require(book.asks.size() == 2, "Snapshot should truncate ask depth");
+  require(book.bids[0].price == FixedPoint::fromString("99"),
+          "Truncated bids should keep the best prices first");
+  require(book.bids[1].price == FixedPoint::fromString("98"),
+          "Second bid level should be the next best price");
+  require(book.asks[0].price == FixedPoint::fromString("101"),
+          "Truncated asks should keep the best prices first");
+  require(book.asks[1].price == FixedPoint::fromString("102"),
+          "Second ask level should be the next best price");
+
+  BookStats stats = engine.stats("ETH/USDT", 2);
+  require(stats.bidQuantity == FixedPoint::fromString("2"),
+          "Stats should aggregate only the truncated bid depth");
+  require(stats.askQuantity == FixedPoint::fromString("2"),
+          "Stats should aggregate only the truncated ask depth");
+  require(stats.spread == FixedPoint::fromString("2"),
+          "Spread should come from the best levels only");
+}
+
+void testMatchingEngineSymbolsAreIsolated() {
+  MatchingEngine engine;
+  engine.submitLimitOrder("ETH/USDT", Side::Sell,
+                          FixedPoint::fromString("100"),
+                          FixedPoint::fromString("1"));
+  engine.submitLimitOrder("BTC/USDT", Side::Sell,
+                          FixedPoint::fromString("50000"),
+                          FixedPoint::fromString("2"));
+
+  SubmitResult buy = engine.submitLimitOrder(
+      "ETH/USDT", Side::Buy, FixedPoint::fromString("100"),
+      FixedPoint::fromString("1"));
+
+  require(buy.trades.size() == 1, "Crossing ETH order should trade");
+  require(buy.trades[0].symbol == "ETH/USDT",
+          "Trade should record its own symbol");
+  BookSnapshot btc = engine.snapshot("BTC/USDT", 5);
+  require(btc.asks.size() == 1,
+          "BTC book should be untouched by ETH matching");
+  require(btc.asks[0].quantity == FixedPoint::fromString("2"),
+          "BTC resting quantity should be unchanged");
+  BookSnapshot eth = engine.snapshot("ETH/USDT", 5);
+  require(eth.bids.empty() && eth.asks.empty(),
+          "Fully matched ETH book should be empty");
+}
+
+void testMatchingEngineEmptyBookStats() {
+  MatchingEngine engine;
+
+  BookSnapshot book = engine.snapshot("ETH/USDT", 5);
+  require(book.bids.empty() && book.asks.empty(),
+          "Unknown symbol snapshot should be empty");
+
+  BookStats stats = engine.stats("ETH/USDT", 5);
+  require(!stats.hasBid, "Empty book should report no best bid");
+  require(!stats.hasAsk, "Empty book should report no best ask");
+  require(almostEqual(stats.imbalance, 0),
+          "Empty book imbalance should default to zero");
+  require(engine.tradeHistory().empty(),
+          "Fresh engine should have no trade history");
+}
+
 } // namespace
 
 int main() {
@@ -291,6 +365,9 @@ int main() {
     testMatchingEngineCancelsRestingBid();
     testMatchingEngineCancelsRestingAsk();
     testMatchingEngineRejectsMissingAndFilledCancellation();
+    testMatchingEngineSnapshotTruncatesDepth();
+    testMatchingEngineSymbolsAreIsolated();
+    testMatchingEngineEmptyBookStats();
   } catch (const std::exception &e) {
     std::cerr << "Test failed: " << e.what() << std::endl;
     return 1;
