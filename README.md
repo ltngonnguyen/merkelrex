@@ -85,6 +85,10 @@ This mode uses FTXUI to render the `bookTicker` replay as an in-place Exchange F
 
 The original project put a lot of effort into terminal visualization. These charts are not the whole project, but they are still the most visible part of it.
 
+**Extra: fullscreen Exchange Floor terminal** (FTXUI, replaying live Binance `bookTicker` data):
+
+![Exchange Floor terminal demo](assets/exchange-floor-demo.gif)
+
 Candlestick chart from historical ETH/BTC ask data:
 
 ![Terminal candlestick chart](assets/candlestick-chart-demo.png)
