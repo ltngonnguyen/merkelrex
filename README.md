@@ -2,35 +2,55 @@
 
 ![Merkelrex cover](assets/merkelrex-cover.png)
 
-Merkelrex is a C++ orderbook simulator and market-data visualizer built around a simple crypto exchange dataset. It started as coursework, but I wanted to keep improving it because the core problem is useful: load messy orderbook snapshots, model bids and asks, match orders, compute market statistics, and make the result inspectable from a terminal.
+Merkelrex started as my CM2005 Object Oriented Programming mid-term project. The original assignment was built around a small crypto exchange simulator: read orderbook data from CSV, let the user inspect market stats, place bids and asks, move through timestamps, and draw text-based charts in the terminal.
 
-This is not trying to be a production exchange. Real exchanges need much stricter guarantees around precision, persistence, latency, concurrency, and risk controls. The goal here is more modest and more honest: show the backend pieces of a small exchange simulator in C++, with enough safety and tests that the project is not just a visual demo.
+I kept working on it after the coursework because I liked the problem more than I expected. There is a nice mix of things here: parsing imperfect data, representing orders, matching bids and asks, calculating OHLCV-style values, and making terminal output that is actually readable. The project is still a learning project, but it is one I have been gradually cleaning up instead of leaving as a one-off submission.
 
-## What It Does
+## What The App Does Right Now
 
-- Loads orderbook rows from CSV market-data snapshots.
-- Parses bids and asks into C++ domain objects.
-- Runs a separate price-time-priority matching engine for limit orders.
-- Cancels open resting orders by order id.
-- Uses fixed-point integer values in the new matching core instead of floating point money.
-- Reports live top-of-book stats: best bid, best ask, spread, mid-price, depth, and imbalance.
-- Tracks known products such as `ETH/BTC` and `BTC/USDT`.
-- Computes basic market statistics: high, low, weighted average open/close.
-- Computes candlestick data from historical snapshots.
-- Computes product volume in USDT terms.
-- Simulates bid/ask matching and updates a user wallet after fills.
-- Draws terminal candlestick and volume graphs using a small custom canvas class.
-- Provides a CMake build and a small C++ test harness.
+There are two ways to run it.
 
-## Why This Project Exists
+The first is the original interactive app:
 
-I wanted a project that sits closer to backend work than to a pure UI demo. The terminal graphs are the visible part, but the more interesting part is the orderbook logic behind them: ingestion, validation, filtering, matching, aggregation, and keeping the program safe when input is incomplete or malformed.
+```bash
+./build/merkelrex
+```
 
-This also gave me a good reason to work in C++ without hiding everything behind a framework. Most of the project is plain classes and standard library containers, which makes the tradeoffs easier to see.
+That opens the menu-driven Merkelrex terminal app. From there you can:
+
+- print help
+- inspect exchange stats for the current timestamp
+- enter an ask
+- enter a bid
+- print the wallet
+- draw a candlestick graph
+- draw a volume graph in USDT terms
+- move to the next timeframe
+- quit cleanly
+
+The second path replays a small order file through the newer matching engine:
+
+```bash
+./build/merkelrex replay
+```
+
+That path does not replace the original app. It is a smaller, cleaner harness I added later so I could work on matching logic without going through the interactive menu every time. It reads `sample_orders.csv`, submits/cancels orders, prints trades, and shows the final book state.
+
+For scripts, the replay command can also output JSON:
+
+```bash
+./build/merkelrex replay --json
+```
+
+The older command name still works as an alias:
+
+```bash
+./build/merkelrex match-demo
+```
 
 ## Screenshots
 
-The newer matching engine is the backend-focused part of the project. The original terminal visualizer is still useful because it makes the market-data side visible without needing a browser frontend.
+The original project put a lot of effort into terminal visualization. These charts are not the whole project, but they are still the most visible part of it.
 
 Candlestick chart from historical ETH/BTC ask data:
 
@@ -40,15 +60,12 @@ Volume graph comparing BTC, DOGE, and ETH volume in USDT terms:
 
 ![Terminal volume graph](assets/volume-graph-demo.png)
 
-## Current Shape
+## Project Layout
 
 ```text
-main.cpp                  Application entry point and CLI subcommands
-MatchingEngine.*          Price-time-priority matching, cancellation, and live-book stats
-FixedPoint.*              8-decimal fixed-point value type for matching logic
-Order.* / Trade.*         Matching-engine domain objects
+main.cpp                  Entry point, interactive app routing, replay command
 MerkelMain.*              Original interactive menu workflow
-OrderBook.*               Market-data storage, filtering, legacy matching, OHLCV logic
+OrderBook.*               Historical market-data storage, filtering, matching, OHLCV logic
 OrderBookEntry.*          Single historical bid/ask/trade row
 CSVReader.*               CSV parsing and row validation
 Wallet.*                  User balance tracking
@@ -57,8 +74,12 @@ Volume.*                  Volume data model
 Canvas.*                  Terminal drawing surface
 CandlestickGraph.*        Terminal candlestick renderer
 VolumeGraph.*             Terminal volume renderer
-sample_orders.csv         Small public demo file for the matching engine
+MatchingEngine.*          Newer limit-order matching engine
+FixedPoint.*              8-decimal fixed-point value type used by the newer engine
+Order.* / Trade.*         Newer matching-engine domain objects
+sample_orders.csv         Small replay file for matching-engine work
 tests/orderbook_tests.cpp Small no-dependency C++ test runner
+assets/                   README images and original design sketches
 ```
 
 ## Build
@@ -76,24 +97,22 @@ Run the interactive app:
 ./build/merkelrex
 ```
 
-Run the matching-engine demo:
+Run the replay harness:
 
 ```bash
-./build/merkelrex match-demo
+./build/merkelrex replay
 ```
 
-The same demo can produce machine-readable JSON:
+Run replay with JSON output:
 
 ```bash
-./build/merkelrex match-demo --json
+./build/merkelrex replay --json
 ```
 
-The JSON output includes the processed events, generated trades, final book snapshots, and live-book stats. This is intentionally still a CLI feature, not a full API server, but it makes the matching core easier to inspect from scripts.
-
-You can also pass a different 4-column order file:
+Pass a different order file:
 
 ```bash
-./build/merkelrex match-demo path/to/orders.csv
+./build/merkelrex replay path/to/orders.csv
 ```
 
 Run the tests:
@@ -104,14 +123,16 @@ ctest --test-dir build --output-on-failure
 
 ## Data
 
-The full historical CSV snapshots are intentionally not meant to be committed to a public GitHub repo. They are large local data files, so `.gitignore` excludes:
+The full historical CSV snapshots are not committed to this repo because they are large. The app expects `20200601.csv` in the project root for the full interactive mode. If that file is missing, the program now exits cleanly instead of crashing on an empty orderbook.
 
-- `20200317.csv`
-- `20200601.csv`
+The historical CSV format is:
 
-The app currently looks for `20200601.csv` in the project root. If that file is missing, the program now exits cleanly instead of crashing on an empty orderbook.
+```text
+timestamp,product,side,price,amount
+2020/06/01 11:57:30.328127,ETH/BTC,bid,0.02482205,23.9999428
+```
 
-For the matching-engine path, the repo includes a tiny `sample_orders.csv` that is safe to commit and useful for demos. Its format is:
+The replay path uses the small committed `sample_orders.csv` file:
 
 ```text
 symbol,side,price,quantity
@@ -119,86 +140,54 @@ ETH/USDT,sell,100.00,5
 ETH/USDT,buy,100.50,3
 ```
 
-It also supports cancellation rows in the demo file:
+It also supports cancellation rows:
 
 ```text
 cancel,3
 ```
 
-Cancellation only applies to orders still resting on the in-memory book. Fully filled orders and unknown order ids are rejected instead of silently succeeding.
+Cancellation only applies to orders that are still resting on the in-memory book. Fully filled orders and unknown ids are rejected.
 
-The expected CSV format is:
+## What I Added After The Original Coursework
 
-```text
-timestamp,product,side,price,amount
-2020/06/01 11:57:30.328127,ETH/BTC,bid,0.02482205,23.9999428
-```
-
-Malformed rows, unknown sides, and non-positive price/amount values are skipped during loading. The loader reports how many valid rows were read and how many malformed rows were skipped.
-
-## Tests
-
-The tests are intentionally simple and framework-free for now. They cover the parts I care about most for a backend-style project:
-
-- CSV parsing skips malformed rows.
-- The orderbook exposes safe empty/non-empty state.
-- Timestamp navigation works forward and backward.
-- High, low, and weighted average calculations are correct.
-- Candlestick and volume calculations return usable results from a small fixture.
-- Fixed-point parsing preserves 8-decimal precision and rejects malformed values.
-- Matching rejects non-crossing orders.
-- Matching handles partial fills.
-- Matching follows price-time priority.
-- Open resting bids and asks can be cancelled by order id.
-- Filled and missing orders cannot be cancelled.
-- Live-book stats calculate best bid/ask, spread, mid-price, depth, and imbalance.
-
-This is not a complete test suite yet, but it is a useful guardrail. Before adding more features, I would expand this around the matching engine and wallet settlement rules.
-
-## Safety Improvements Made After The Original Coursework Version
-
-- Added a proper `9: Quit` menu option.
-- Stopped the CLI from looping forever when standard input reaches EOF.
-- Added empty-data checks before reading the first order.
-- Added CSV validation for malformed rows, unknown order sides, and non-positive values.
-- Added safer handling for malformed product symbols.
-- Removed the checked-in binary from the showcase copy.
-- Added CMake build targets for the app and tests.
-- Added a fixed-point matching-engine core separate from the older coursework classes.
-- Added a public sample order file and a `match-demo` CLI command.
-- Added live-book analytics for spread, mid-price, depth, and imbalance.
-- Added cancellation for open resting orders in the matching engine.
+- CMake build setup.
+- A clean quit option in the original menu.
+- Safer handling for missing or empty CSV data.
+- CSV validation for malformed rows, unknown sides, and non-positive values.
+- Tests for parsing, time navigation, price aggregation, candlesticks, volume, matching, cancellation, and book stats.
+- A newer `MatchingEngine` separate from the original menu code.
+- Fixed-point values in the newer matching engine.
+- Price-time-priority matching with partial fills.
+- Order cancellation for resting orders.
+- Book snapshots and simple live stats: best bid, best ask, spread, mid-price, depth, and imbalance.
+- A replay command with text and JSON output.
 
 ## What Worked
 
-- The custom `Canvas` class made terminal graph rendering much easier to reason about than printing directly inside nested loops.
-- Weighted average prices made the candlestick open/close values more meaningful than picking an arbitrary row.
-- Separating `MatchingEngine` from the terminal UI made the exchange logic much easier to test.
-- Adding book stats made the demo more backend-relevant than adding another visual chart.
-- Keeping the app in C++ made the data structures and ownership model explicit.
-- The terminal UI makes the project easy to demo without a browser or database.
+- The custom `Canvas` class made terminal drawing much easier than trying to print everything directly in nested loops.
+- Weighted average prices gave the candlestick open/close values more meaning than choosing an arbitrary row.
+- Splitting out the newer `MatchingEngine` made it easier to test matching behavior without driving the whole menu app.
+- Keeping the project mostly plain C++ made the data structures easy to see and reason about.
 
-## What Is Still Not Production-Grade
+## What Is Still Rough
 
-- The historical market-data path still uses `double`/`long double`; the newer matching engine uses fixed-point integers.
-- The matching engine now supports price-time-priority matching, but it is still single-process and in-memory.
-- Cancellation is supported by order id, but there is no user/session permission model around who owns an order yet.
-- There is no REST API yet.
-- The CSV parser is deliberately small and does not handle every valid CSV edge case.
-- There is no persistence layer, authentication, concurrency model, or audit log.
+- The original historical-data path still uses `double`/`long double`; only the newer matching engine uses fixed-point integers.
+- The newer matching engine is in-memory only.
+- Cancellation is by order id only; there is no user/session ownership model.
+- The CSV parser is deliberately small and does not try to handle every possible CSV edge case.
+- There is no persistence layer, networking, or database.
+- Some parts still show their coursework origin, especially the menu flow and older class boundaries.
 
-I am keeping these limitations visible because they are part of the project. The point is not to pretend this is a real exchange. The point is to show that I understand where the gap is between a learning project and backend software that handles money.
+I am keeping those limitations visible because they are true. This is not meant to pretend to be a production exchange. It is a coursework project that grew into a more complete C++ orderbook experiment.
 
-## Next Improvements
+## Next Things I Might Add
 
-The next version I would build for a backend-focused portfolio would add:
-
-- More matching tests, especially partial fills.
-- A proper order-management CLI around submit/cancel/book/trades instead of only the sample-file demo.
+- A cleaner order-management CLI around submit/cancel/book/trades.
 - JSON output for the historical market stats and candle path.
-- A small REST API around the core engine.
-- Terminal recordings of the graph output.
+- More tests around edge cases in the matching engine.
+- A small REST API, if I decide it is worth adding instead of keeping this as a terminal-first project.
+- Terminal recordings of the chart output.
 
 ## Main Takeaway
 
-This project is useful because it touches several things that matter in exchange backend work: validating external data, modeling orders, computing market aggregates, handling bad input safely, and testing the parts where quiet mistakes can become expensive. The terminal visualization makes it easier to see, but the backend logic is the part I would keep building on.
+The part I like about this project is that it turns a simple CSV-based coursework simulator into something I can keep improving piece by piece. The terminal charts came first, then safety fixes, then tests, then a cleaner matching engine. It is still small, but it has become a useful place for me to practise C++ design around market data and order matching.
