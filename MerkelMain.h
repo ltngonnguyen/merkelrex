@@ -21,6 +21,9 @@ private:
   void drawCandlesticks();
   void drawVolumeGraph();
   void gotoNextTimeframe();
+  void playMarketData();
+  void printTopOfBookSnapshot();
+  int estimatePlaybackDelayMs();
   int getUserOption();
   bool processUserOption(int userOption);
 

@@ -32,6 +32,7 @@ From the menu you can:
 - draw a candlestick graph
 - draw a volume/notional graph
 - move to the next timeframe
+- play market data continuously with an automatically chosen tick delay
 - quit cleanly
 
 The second path replays a small order file through the newer matching engine:
@@ -158,6 +159,8 @@ event_time,product,ask,best_ask_price,best_ask_qty
 That lets the original market-stats and charting code keep working while the underlying data comes from Binance. Event timestamps are converted from milliseconds to readable UTC strings.
 
 For Binance `bookTicker`, option `7` graphs top-of-book notional at the current timestamp. That is not the same thing as traded volume; it is `best_bid_price * best_bid_qty` plus `best_ask_price * best_ask_qty`. The older coursework pair data still uses the original USDT volume conversion path.
+
+Option `10` starts continuous market playback. It samples upcoming timestamp gaps, chooses a terminal-friendly delay automatically, then prints compact top-of-book snapshots until the process is stopped.
 
 The older coursework CSV format is still supported:
 

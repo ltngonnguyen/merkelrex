@@ -9,6 +9,7 @@
 class OrderBook {
 private:
   std::vector<OrderBookEntry> orders;
+  std::vector<std::string> timestamps;
 
 public:
   /** construct, reading a csv data file */

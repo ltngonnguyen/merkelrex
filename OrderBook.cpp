@@ -10,6 +10,13 @@
 /** construct, reading a csv data file */
 OrderBook::OrderBook(std::string filename) {
   orders = CSVReader::readCSV(filename);
+  std::sort(orders.begin(), orders.end(), OrderBookEntry::compareByTimestamp);
+
+  for (const OrderBookEntry &order : orders) {
+    if (timestamps.empty() || timestamps.back() != order.timestamp) {
+      timestamps.push_back(order.timestamp);
+    }
+  }
 }
 
 bool OrderBook::isEmpty() const { return orders.empty(); }
@@ -83,7 +90,15 @@ std::vector<OrderBookEntry> OrderBook::getOrders(OrderBookType type,
                                                  std::string product,
                                                  std::string timestamp) {
   std::vector<OrderBookEntry> orders_sub;
-  for (OrderBookEntry &e : orders) {
+  auto first = std::lower_bound(
+      orders.begin(), orders.end(), timestamp,
+      [](const OrderBookEntry &order, const std::string &time) {
+        return order.timestamp < time;
+      });
+
+  for (auto order = first; order != orders.end() && order->timestamp == timestamp;
+       ++order) {
+    OrderBookEntry &e = *order;
     if (e.orderType == type && e.product == product &&
         e.timestamp == timestamp) {
       orders_sub.push_back(e);
@@ -144,41 +159,31 @@ std::string OrderBook::getEarliestTime() {
   if (orders.empty()) {
     return "";
   }
-  return orders[0].timestamp;
+  return timestamps[0];
 }
 
 std::string OrderBook::getNextTime(std::string timestamp) {
-  if (orders.empty()) {
+  if (timestamps.empty()) {
     return "";
   }
-  std::string next_timestamp = "";
-  for (OrderBookEntry &e : orders) {
-    if (e.timestamp > timestamp) {
-      next_timestamp = e.timestamp;
-      break;
-    }
+  auto next = std::upper_bound(timestamps.begin(), timestamps.end(), timestamp);
+  if (next == timestamps.end()) {
+    return timestamps[0];
   }
-  if (next_timestamp == "") {
-    next_timestamp = orders[0].timestamp;
-  }
-  return next_timestamp;
+  return *next;
 }
 
 // ADDITION #1
 /** returns the previous timestamp before the input timestamp*/
 std::string OrderBook::getLastTime(std::string timestamp) {
   std::string last_timestamp = "";
-  if (orders.empty()) {
+  if (timestamps.empty()) {
     return last_timestamp;
   }
-  // This reverse loop was a pain to figure out
-  for (std::size_t e = orders.size(); e-- > 0;) {
-    // If the timestamp is immediately less than the input timestamp, set the
-    // last timestamp, break out of the loop and return it
-    if (orders[e].timestamp < timestamp) {
-      last_timestamp = orders[e].timestamp;
-      break;
-    }
+  auto last = std::lower_bound(timestamps.begin(), timestamps.end(), timestamp);
+  if (last != timestamps.begin()) {
+    --last;
+    last_timestamp = *last;
   }
   return last_timestamp;
 }
@@ -338,6 +343,11 @@ double OrderBook::averagePrice(std::string product, std::string timestamp) {
 
 void OrderBook::insertOrder(OrderBookEntry &order) {
   orders.push_back(order);
+  if (!std::binary_search(timestamps.begin(), timestamps.end(),
+                          order.timestamp)) {
+    timestamps.push_back(order.timestamp);
+    std::sort(timestamps.begin(), timestamps.end());
+  }
   std::sort(orders.begin(), orders.end(), OrderBookEntry::compareByTimestamp);
 }
 
