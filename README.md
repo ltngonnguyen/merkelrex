@@ -4,7 +4,7 @@
 
 Merkelrex started as my CM2005 Object Oriented Programming mid-term project. The original assignment was built around a small crypto exchange simulator: read orderbook data from CSV, let the user inspect market stats, place bids and asks, move through timestamps, and draw text-based charts in the terminal.
 
-I kept working on it after the coursework because I liked the problem more than I expected. There is a nice mix of things here: parsing imperfect data, representing orders, matching bids and asks, calculating OHLCV-style values, and making terminal output that is actually readable. The project is still a learning project, but it is one I have been gradually cleaning up instead of leaving as a one-off submission.
+I kept working on it after the coursework because I liked the problem more than I expected. The current direction is to move away from the original bundled coursework CSV and make the app useful with real Binance public data. The first Binance format supported is COIN-M futures `bookTicker`, which gives historical best bid/ask price and quantity updates.
 
 ## What The App Does Right Now
 
@@ -16,7 +16,13 @@ The first is the original interactive app:
 ./build/merkelrex
 ```
 
-That opens the menu-driven Merkelrex terminal app. From there you can:
+That opens the menu-driven Merkelrex terminal app. On this branch it loads a local Binance `bookTicker` zip by default:
+
+```text
+ADAUSD_230929-bookTicker-2023-09-29.zip
+```
+
+From the menu you can:
 
 - print help
 - inspect exchange stats for the current timestamp
@@ -24,7 +30,7 @@ That opens the menu-driven Merkelrex terminal app. From there you can:
 - enter a bid
 - print the wallet
 - draw a candlestick graph
-- draw a volume graph in USDT terms
+- draw a volume/notional graph
 - move to the next timeframe
 - quit cleanly
 
@@ -123,9 +129,37 @@ ctest --test-dir build --output-on-failure
 
 ## Data
 
-The full historical CSV snapshots are not committed to this repo because they are large. The app expects `20200601.csv` in the project root for the full interactive mode. If that file is missing, the program now exits cleanly instead of crashing on an empty orderbook.
+The full historical data files are not committed to this repo because they are large. The interactive app currently expects this Binance file in the project root:
 
-The historical CSV format is:
+```text
+ADAUSD_230929-bookTicker-2023-09-29.zip
+```
+
+Binance COIN-M futures `bookTicker` files can be downloaded from:
+
+```text
+https://data.binance.vision/?prefix=data/futures/cm/daily/bookTicker/
+```
+
+The Binance `bookTicker` CSV inside the zip has this shape:
+
+```text
+update_id,best_bid_price,best_bid_qty,best_ask_price,best_ask_qty,transaction_time,event_time
+745418277880,0.24910000,123.00000000,0.24920000,8.00000000,1695945600934,1695945600949
+```
+
+Merkelrex adapts each Binance `bookTicker` row into two internal rows:
+
+```text
+event_time,product,bid,best_bid_price,best_bid_qty
+event_time,product,ask,best_ask_price,best_ask_qty
+```
+
+That lets the original market-stats and charting code keep working while the underlying data comes from Binance. Event timestamps are converted from milliseconds to readable UTC strings.
+
+For Binance `bookTicker`, option `7` graphs top-of-book notional at the current timestamp. That is not the same thing as traded volume; it is `best_bid_price * best_bid_qty` plus `best_ask_price * best_ask_qty`. The older coursework pair data still uses the original USDT volume conversion path.
+
+The older coursework CSV format is still supported:
 
 ```text
 timestamp,product,side,price,amount
@@ -154,6 +188,8 @@ Cancellation only applies to orders that are still resting on the in-memory book
 - A clean quit option in the original menu.
 - Safer handling for missing or empty CSV data.
 - CSV validation for malformed rows, unknown sides, and non-positive values.
+- Binance COIN-M futures `bookTicker` zip support.
+- Top-of-book notional graph fallback for one-symbol Binance data.
 - Tests for parsing, time navigation, price aggregation, candlesticks, volume, matching, cancellation, and book stats.
 - A newer `MatchingEngine` separate from the original menu code.
 - Fixed-point values in the newer matching engine.
@@ -172,6 +208,7 @@ Cancellation only applies to orders that are still resting on the in-memory book
 ## What Is Still Rough
 
 - The original historical-data path still uses `double`/`long double`; only the newer matching engine uses fixed-point integers.
+- Binance support currently targets `bookTicker` only. Other Binance datasets like trades, klines, and bookDepth are not wired into the app yet.
 - The newer matching engine is in-memory only.
 - Cancellation is by order id only; there is no user/session ownership model.
 - The CSV parser is deliberately small and does not try to handle every possible CSV edge case.
@@ -183,6 +220,8 @@ I am keeping those limitations visible because they are true. This is not meant 
 ## Next Things I Might Add
 
 - A cleaner order-management CLI around submit/cancel/book/trades.
+- Better chart aggregation for high-frequency Binance bookTicker data.
+- Support for Binance klines after bookTicker is stable.
 - JSON output for the historical market stats and candle path.
 - More tests around edge cases in the matching engine.
 - A small REST API, if I decide it is worth adding instead of keeping this as a terminal-first project.

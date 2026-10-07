@@ -70,7 +70,7 @@ void MerkelMain::printMenu() {
   // 6 draw candlestick
   std::cout << "6: Draw candlestick graph" << std::endl;
   // 7 draw volume graph
-  std::cout << "7: Draw volume graph (in USDT)" << std::endl;
+  std::cout << "7: Draw volume/notional graph" << std::endl;
   // 8 continue
   std::cout << "8: Continue" << std::endl;
   // 9 quit
@@ -233,8 +233,8 @@ void MerkelMain::drawCandlesticks() {
 }
 
 // #ADDITION #8
-// compute and then draw the volume graph, based on the current timestamp, using
-// the VolumeGraph class
+// compute and then draw the volume/notional graph, based on the current
+// timestamp, using the VolumeGraph class
 void MerkelMain::drawVolumeGraph() {
   std::vector<Volume> volumes = orderBook.computeVolumes(currentTime);
   VolumeGraph graph(volumes);

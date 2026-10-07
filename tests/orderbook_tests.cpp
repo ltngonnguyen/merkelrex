@@ -33,6 +33,13 @@ void writeFixture(const std::string &path) {
   file << "2020/01/01 00:00:10,BTC/USDT,bid,9900,0.5\n";
 }
 
+void writeBookTickerFixture(const std::string &path) {
+  std::ofstream file(path);
+  file << "update_id,best_bid_price,best_bid_qty,best_ask_price,best_ask_qty,transaction_time,event_time\n";
+  file << "1,0.24910000,123.00000000,0.24920000,8.00000000,1695945600934,1695945600949\n";
+  file << "2,0.24900000,10.00000000,0.24930000,11.00000000,1695945601934,1695945601949\n";
+}
+
 void testCsvReaderRejectsBadRows() {
   const std::string path = "test_orders.csv";
   writeFixture(path);
@@ -42,6 +49,41 @@ void testCsvReaderRejectsBadRows() {
   require(entries[0].product == "ETH/USDT", "CSV reader should keep product");
   require(entries[0].orderType == OrderBookType::ask,
           "CSV reader should parse order side");
+}
+
+void testCsvReaderParsesBinanceBookTickerRows() {
+  const std::string path = "ADAUSD_TEST-bookTicker-fixture.csv";
+  writeBookTickerFixture(path);
+
+  std::vector<OrderBookEntry> entries = CSVReader::readCSV(path);
+  require(entries.size() == 4,
+          "Each bookTicker row should produce one bid and one ask entry");
+  require(entries[0].product == "ADAUSD_TEST",
+          "BookTicker product should come from the filename");
+  require(entries[0].orderType == OrderBookType::bid,
+          "First converted bookTicker entry should be bid");
+  require(entries[1].orderType == OrderBookType::ask,
+          "Second converted bookTicker entry should be ask");
+  require(entries[0].timestamp == "2023-09-29 00:00:00.949",
+          "BookTicker event_time should become a readable UTC timestamp");
+  require(almostEqual(entries[0].price, 0.2491),
+          "BookTicker bid price should be parsed");
+  require(almostEqual(entries[1].amount, 8),
+          "BookTicker ask quantity should be parsed");
+}
+
+void testBookTickerNotionalFallbackForSingleSymbolProducts() {
+  const std::string path = "ADAUSD_TEST-bookTicker-fixture.csv";
+  writeBookTickerFixture(path);
+  OrderBook book{path};
+
+  std::vector<Volume> volumes = book.computeVolumes("2023-09-29 00:00:00.949");
+  require(volumes.size() == 1,
+          "BookTicker single-symbol data should produce one notional bar");
+  require(volumes[0].getProduct() == "ADAUSD_TEST",
+          "BookTicker notional should keep the symbol name");
+  require(almostEqual(volumes[0].getVolume(), 32.6329),
+          "BookTicker notional should sum bid and ask price times quantity");
 }
 
 void testOrderBookTimeNavigation() {
@@ -236,6 +278,8 @@ void testMatchingEngineRejectsMissingAndFilledCancellation() {
 int main() {
   try {
     testCsvReaderRejectsBadRows();
+    testCsvReaderParsesBinanceBookTickerRows();
+    testBookTickerNotionalFallbackForSingleSymbolProducts();
     testOrderBookTimeNavigation();
     testPriceAggregates();
     testCandlesticksAndVolumes();

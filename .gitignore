@@ -18,4 +18,11 @@ test_orders.csv
 20200317.csv
 20200601.csv
 
+# Local Binance public-data downloads. Keep tiny fixtures in tests instead.
+ADAUSD_*.csv
+ADAUSD_*.zip
+*-bookTicker-*.zip
+*-bookDepth-*.zip
+*-trades-*.csv
+
 .DS_Store

@@ -281,6 +281,7 @@ std::vector<Volume> OrderBook::computeVolumes(std::string currentTime) {
     for (OrderBookEntry &order : orders_sub) {
       std::vector<std::string> parts = CSVReader::tokenise(order.product, '/');
       if (parts.size() < 2) {
+        volumeUSDT += order.amount * order.price;
         continue;
       }
       std::string secondProduct = parts[1];
