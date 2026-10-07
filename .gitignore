@@ -1,0 +1,21 @@
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+CTestTestfile.cmake
+Testing/
+
+# Local binaries and temporary test files.
+main
+merkelrex
+orderbook_tests
+test_orders.csv
+*.o
+*.out
+
+# Large exchange snapshots are intentionally kept out of a public GitHub repo.
+# Download or restore them locally when running the full interactive demo.
+20200317.csv
+20200601.csv
+
+.DS_Store

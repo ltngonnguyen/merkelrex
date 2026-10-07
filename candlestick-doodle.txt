@@ -1,0 +1,38 @@
+100 T
+    |
+90  T  .
+    |  |
+80  T ███
+    | ███
+70  T ███
+    | ███
+60  T  |
+    |  '
+    |
+    |
+    |  |
+    | ░░░
+    | ░░░
+    | ░░░
+    | ░░░
+    |  |
+    |
+    |
+    |
+    |
+    |
+    |
+    |__________________________________________________
+      ts1
+
+Find lower bound of Y axis
+Find upper bound of Y axis
+Decide how tall the chart should be (this is a constant)
+Find the number of ticks on Y axis (Upper bound - Lower bound / Height)
+Decide the space between timeframe on X axis
+
+For each candlestick:
+ . ╷ ╵ │
+
+
+

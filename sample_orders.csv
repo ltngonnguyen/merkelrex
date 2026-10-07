@@ -1,0 +1,8 @@
+# symbol,side,price,quantity
+ETH/USDT,sell,100.00,5
+ETH/USDT,sell,101.00,2
+ETH/USDT,buy,99.50,1
+ETH/USDT,buy,100.50,3
+ETH/USDT,buy,102.00,5
+BTC/USDT,sell,65000.00,0.25
+BTC/USDT,buy,65100.00,0.10
