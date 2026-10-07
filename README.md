@@ -82,6 +82,14 @@ Run the matching-engine demo:
 ./build/merkelrex match-demo
 ```
 
+The same demo can produce machine-readable JSON:
+
+```bash
+./build/merkelrex match-demo --json
+```
+
+The JSON output includes the processed events, generated trades, final book snapshots, and live-book stats. This is intentionally still a CLI feature, not a full API server, but it makes the matching core easier to inspect from scripts.
+
 You can also pass a different 4-column order file:
 
 ```bash
@@ -186,11 +194,10 @@ I am keeping these limitations visible because they are part of the project. The
 The next version I would build for a backend-focused portfolio would add:
 
 - More matching tests, especially partial fills.
-- JSON output mode for market stats and candles.
 - A proper order-management CLI around submit/cancel/book/trades instead of only the sample-file demo.
-- JSON output for the matching demo and live-book stats.
+- JSON output for the historical market stats and candle path.
 - A small REST API around the core engine.
-- Sample screenshots or terminal recordings of the graph output.
+- Terminal recordings of the graph output.
 
 ## Main Takeaway
 
