@@ -78,7 +78,8 @@ void addBinanceBookTickerRow(std::vector<OrderBookEntry> &entries,
 
 CSVReader::CSVReader() {}
 
-std::vector<OrderBookEntry> CSVReader::readCSV(std::string csvFilename) {
+std::vector<OrderBookEntry> CSVReader::readCSV(std::string csvFilename,
+                                               bool verbose) {
   std::vector<OrderBookEntry> entries;
   std::string line;
   int skippedRows = 0;
@@ -149,9 +150,11 @@ std::vector<OrderBookEntry> CSVReader::readCSV(std::string csvFilename) {
     }
   }
 
-  std::cout << "CSVReader::readCSV read " << entries.size() << " entries"
-            << std::endl;
-  if (skippedRows > 0) {
+  if (verbose) {
+    std::cout << "CSVReader::readCSV read " << entries.size() << " entries"
+              << std::endl;
+  }
+  if (verbose && skippedRows > 0) {
     std::cout << "CSVReader::readCSV skipped " << skippedRows
               << " malformed rows" << std::endl;
   }

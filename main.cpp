@@ -1,6 +1,7 @@
 #include "MerkelMain.h"
 #include "CSVReader.h"
 #include "MatchingEngine.h"
+#include "MerkelTui.h"
 #include "Wallet.h"
 
 #include <fstream>
@@ -336,6 +337,10 @@ int runMatchDemo(const std::string &path, bool jsonMode) {
 } // namespace
 
 int main(int argc, char *argv[]) {
+  if (argc > 1 && std::string(argv[1]) == "tui") {
+    return runMerkelTui();
+  }
+
   if (argc > 1 &&
       (std::string(argv[1]) == "replay" || std::string(argv[1]) == "match-demo")) {
     std::string path = "sample_orders.csv";

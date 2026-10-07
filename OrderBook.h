@@ -14,6 +14,7 @@ private:
 public:
   /** construct, reading a csv data file */
   OrderBook(std::string filename);
+  OrderBook(std::string filename, bool verbose);
   bool isEmpty() const;
   std::size_t size() const;
   /** return vector of all know products in the dataset*/

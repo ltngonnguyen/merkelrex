@@ -8,7 +8,7 @@ I kept working on it after the coursework because I liked the problem more than 
 
 ## What The App Does Right Now
 
-There are two ways to run it.
+There are three ways to run it.
 
 The first is the original interactive app:
 
@@ -42,6 +42,14 @@ The second path replays a small order file through the newer matching engine:
 ```
 
 That path does not replace the original app. It is a smaller, cleaner harness I added later so I could work on matching logic without going through the interactive menu every time. It reads `sample_orders.csv`, submits/cancels orders, prints trades, and shows the final book state.
+
+The third path opens the fullscreen market terminal:
+
+```bash
+./build/merkelrex tui
+```
+
+This mode uses FTXUI to render the Binance `bookTicker` replay as an in-place Exchange Floor dashboard. It starts playback automatically, hides the old scrolling tick output, and exposes keyboard controls directly in the footer: space to pause/resume, `n` to step, `f`/`s` to adjust speed, `r` to reset cadence, and `q` to exit.
 
 For scripts, the replay command can also output JSON:
 

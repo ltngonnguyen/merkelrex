@@ -8,8 +8,10 @@
 #include <thread>
 
 /** construct, reading a csv data file */
-OrderBook::OrderBook(std::string filename) {
-  orders = CSVReader::readCSV(filename);
+OrderBook::OrderBook(std::string filename) : OrderBook(filename, true) {}
+
+OrderBook::OrderBook(std::string filename, bool verbose) {
+  orders = CSVReader::readCSV(filename, verbose);
   std::sort(orders.begin(), orders.end(), OrderBookEntry::compareByTimestamp);
 
   for (const OrderBookEntry &order : orders) {
