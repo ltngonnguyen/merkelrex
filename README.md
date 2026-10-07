@@ -9,6 +9,7 @@ This is not trying to be a production exchange. Real exchanges need much stricte
 - Loads orderbook rows from CSV market-data snapshots.
 - Parses bids and asks into C++ domain objects.
 - Runs a separate price-time-priority matching engine for limit orders.
+- Cancels open resting orders by order id.
 - Uses fixed-point integer values in the new matching core instead of floating point money.
 - Reports live top-of-book stats: best bid, best ask, spread, mid-price, depth, and imbalance.
 - Tracks known products such as `ETH/BTC` and `BTC/USDT`.
@@ -29,7 +30,7 @@ This also gave me a good reason to work in C++ without hiding everything behind 
 
 ```text
 main.cpp                  Application entry point and CLI subcommands
-MatchingEngine.*          Price-time-priority matching and live-book stats
+MatchingEngine.*          Price-time-priority matching, cancellation, and live-book stats
 FixedPoint.*              8-decimal fixed-point value type for matching logic
 Order.* / Trade.*         Matching-engine domain objects
 MerkelMain.*              Original interactive menu workflow
@@ -96,6 +97,14 @@ ETH/USDT,sell,100.00,5
 ETH/USDT,buy,100.50,3
 ```
 
+It also supports cancellation rows in the demo file:
+
+```text
+cancel,3
+```
+
+Cancellation only applies to orders still resting on the in-memory book. Fully filled orders and unknown order ids are rejected instead of silently succeeding.
+
 The expected CSV format is:
 
 ```text
@@ -118,6 +127,8 @@ The tests are intentionally simple and framework-free for now. They cover the pa
 - Matching rejects non-crossing orders.
 - Matching handles partial fills.
 - Matching follows price-time priority.
+- Open resting bids and asks can be cancelled by order id.
+- Filled and missing orders cannot be cancelled.
 - Live-book stats calculate best bid/ask, spread, mid-price, depth, and imbalance.
 
 This is not a complete test suite yet, but it is a useful guardrail. Before adding more features, I would expand this around the matching engine and wallet settlement rules.
@@ -134,6 +145,7 @@ This is not a complete test suite yet, but it is a useful guardrail. Before addi
 - Added a fixed-point matching-engine core separate from the older coursework classes.
 - Added a public sample order file and a `match-demo` CLI command.
 - Added live-book analytics for spread, mid-price, depth, and imbalance.
+- Added cancellation for open resting orders in the matching engine.
 
 ## What Worked
 
@@ -148,6 +160,7 @@ This is not a complete test suite yet, but it is a useful guardrail. Before addi
 
 - The historical market-data path still uses `double`/`long double`; the newer matching engine uses fixed-point integers.
 - The matching engine now supports price-time-priority matching, but it is still single-process and in-memory.
+- Cancellation is supported by order id, but there is no user/session permission model around who owns an order yet.
 - There is no REST API yet.
 - The CSV parser is deliberately small and does not handle every valid CSV edge case.
 - There is no persistence layer, authentication, concurrency model, or audit log.
@@ -160,7 +173,7 @@ The next version I would build for a backend-focused portfolio would add:
 
 - More matching tests, especially partial fills.
 - JSON output mode for market stats and candles.
-- Order cancellation.
+- A proper order-management CLI around submit/cancel/book/trades instead of only the sample-file demo.
 - JSON output for the matching demo and live-book stats.
 - A small REST API around the core engine.
 - Sample screenshots or terminal recordings of the graph output.

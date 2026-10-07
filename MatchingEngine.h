@@ -40,6 +40,7 @@ class MatchingEngine {
 public:
   SubmitResult submitLimitOrder(const std::string &symbol, Side side,
                                 FixedPoint price, FixedPoint quantity);
+  bool cancelOrder(std::uint64_t orderId);
 
   BookSnapshot snapshot(const std::string &symbol,
                         std::size_t depth = 5) const;
@@ -58,6 +59,8 @@ private:
   std::map<std::string, Book> books;
   std::vector<Trade> trades;
 
+  static bool cancelFromSide(std::vector<Order> &orders,
+                             std::uint64_t orderId);
   static bool isBidBetter(const Order &left, const Order &right);
   static bool isAskBetter(const Order &left, const Order &right);
   static void aggregateLevel(std::vector<BookLevel> &levels, const Order &order,

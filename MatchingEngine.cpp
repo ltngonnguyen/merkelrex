@@ -75,6 +75,16 @@ SubmitResult MatchingEngine::submitLimitOrder(const std::string &symbol,
   return result;
 }
 
+bool MatchingEngine::cancelOrder(std::uint64_t orderId) {
+  for (auto &entry : books) {
+    Book &book = entry.second;
+    if (cancelFromSide(book.bids, orderId) || cancelFromSide(book.asks, orderId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 BookSnapshot MatchingEngine::snapshot(const std::string &symbol,
                                       std::size_t depth) const {
   BookSnapshot output;
@@ -136,6 +146,19 @@ BookStats MatchingEngine::stats(const std::string &symbol,
 }
 
 const std::vector<Trade> &MatchingEngine::tradeHistory() const { return trades; }
+
+bool MatchingEngine::cancelFromSide(std::vector<Order> &orders,
+                                    std::uint64_t orderId) {
+  auto orderIt = std::find_if(orders.begin(), orders.end(),
+                              [orderId](const Order &order) {
+                                return order.id == orderId;
+                              });
+  if (orderIt == orders.end()) {
+    return false;
+  }
+  orders.erase(orderIt);
+  return true;
+}
 
 bool MatchingEngine::isBidBetter(const Order &left, const Order &right) {
   if (left.price != right.price) {

@@ -52,6 +52,7 @@ int runMatchDemo(const std::string &path) {
   std::string line;
   int lineNumber = 0;
   int accepted = 0;
+  int cancelled = 0;
   int skipped = 0;
 
   while (std::getline(file, line)) {
@@ -61,9 +62,29 @@ int runMatchDemo(const std::string &path) {
     }
 
     std::vector<std::string> tokens = CSVReader::tokenise(line, ',');
+    if (tokens.size() == 2 && tokens[0] == "cancel") {
+      try {
+        std::uint64_t orderId = std::stoull(tokens[1]);
+        if (engine.cancelOrder(orderId)) {
+          cancelled++;
+          std::cout << "Cancelled order " << orderId << std::endl;
+        } else {
+          skipped++;
+          std::cout << "Could not cancel order " << orderId
+                    << ": it is not resting on the book" << std::endl;
+        }
+      } catch (const std::exception &e) {
+        skipped++;
+        std::cout << "Skipping line " << lineNumber << ": " << e.what()
+                  << std::endl;
+      }
+      continue;
+    }
+
     if (tokens.size() != 4) {
       skipped++;
-      std::cout << "Skipping line " << lineNumber << ": expected 4 fields"
+      std::cout << "Skipping line " << lineNumber
+                << ": expected order row or cancel row"
                 << std::endl;
       continue;
     }
@@ -99,8 +120,8 @@ int runMatchDemo(const std::string &path) {
   }
 
   std::cout << std::endl;
-  std::cout << "Accepted " << accepted << " orders, skipped " << skipped
-            << " rows" << std::endl;
+  std::cout << "Accepted " << accepted << " orders, cancelled " << cancelled
+            << ", skipped " << skipped << " rows" << std::endl;
   std::cout << "Total trades: " << engine.tradeHistory().size() << std::endl;
 
   for (const std::string &symbol : {std::string("ETH/USDT"),

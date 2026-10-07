@@ -196,6 +196,41 @@ void testMatchingEngineBookStats() {
           "Imbalance should be bid depth over total depth");
 }
 
+void testMatchingEngineCancelsRestingBid() {
+  MatchingEngine engine;
+  SubmitResult bid = engine.submitLimitOrder(
+      "ETH/USDT", Side::Buy, FixedPoint::fromString("99"),
+      FixedPoint::fromString("2"));
+
+  require(engine.cancelOrder(bid.orderId), "Open bid should be cancellable");
+  BookSnapshot book = engine.snapshot("ETH/USDT", 5);
+  require(book.bids.empty(), "Cancelled bid should leave the book");
+}
+
+void testMatchingEngineCancelsRestingAsk() {
+  MatchingEngine engine;
+  SubmitResult ask = engine.submitLimitOrder(
+      "ETH/USDT", Side::Sell, FixedPoint::fromString("101"),
+      FixedPoint::fromString("2"));
+
+  require(engine.cancelOrder(ask.orderId), "Open ask should be cancellable");
+  BookSnapshot book = engine.snapshot("ETH/USDT", 5);
+  require(book.asks.empty(), "Cancelled ask should leave the book");
+}
+
+void testMatchingEngineRejectsMissingAndFilledCancellation() {
+  MatchingEngine engine;
+  SubmitResult ask = engine.submitLimitOrder(
+      "ETH/USDT", Side::Sell, FixedPoint::fromString("100"),
+      FixedPoint::fromString("1"));
+  engine.submitLimitOrder("ETH/USDT", Side::Buy, FixedPoint::fromString("100"),
+                          FixedPoint::fromString("1"));
+
+  require(!engine.cancelOrder(ask.orderId),
+          "Fully filled order should no longer be cancellable");
+  require(!engine.cancelOrder(999), "Missing order should not be cancellable");
+}
+
 } // namespace
 
 int main() {
@@ -209,6 +244,9 @@ int main() {
     testMatchingEnginePartialFill();
     testMatchingEnginePriceTimePriority();
     testMatchingEngineBookStats();
+    testMatchingEngineCancelsRestingBid();
+    testMatchingEngineCancelsRestingAsk();
+    testMatchingEngineRejectsMissingAndFilledCancellation();
   } catch (const std::exception &e) {
     std::cerr << "Test failed: " << e.what() << std::endl;
     return 1;
