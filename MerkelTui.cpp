@@ -12,6 +12,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <ftxui/component/component.hpp>
@@ -82,6 +83,47 @@ std::string pulse(int frame, int width) {
   return output;
 }
 
+std::string trimToWidth(const std::string &value, std::size_t width) {
+  if (value.size() <= width) {
+    return value;
+  }
+  return value.substr(0, width);
+}
+
+std::string animatedRailLine(int frame, int row) {
+  static const std::vector<std::string> glyphs = {"░", "▒", "▓", "█", "▓", "▒", "◆", "◇"};
+  std::string output = "▌";
+  for (int i = 0; i < 7; ++i) {
+    output += glyphs[(frame + row + i) % glyphs.size()];
+  }
+  output += "▐";
+  return output;
+}
+
+ftxui::Element animatedRail(int frame, int height, ftxui::Color railColor) {
+  using namespace ftxui;
+  Elements lines;
+  for (int row = 0; row < height; ++row) {
+    lines.push_back(text(animatedRailLine(frame, row)) | bold |
+                    color(railColor));
+  }
+  return vbox(std::move(lines));
+}
+
+std::string rotatingTape(const MarketSnapshot &snapshot, int frame) {
+  std::string tape = "  ◆ " + snapshot.product +
+                     "  ◆ BID " + formatDouble(snapshot.bidPrice, 8) +
+                     "  ◆ ASK " + formatDouble(snapshot.askPrice, 8) +
+                     "  ◆ SPREAD " + formatDouble(snapshot.spread, 8) +
+                     "  ◆ MID " + formatDouble(snapshot.mid, 8) +
+                     "  ◆ FLOW " +
+                     (snapshot.bidQty >= snapshot.askQty ? "BID SIDE" : "ASK SIDE") +
+                     "  ◆ LIQUIDITY " +
+                     formatDouble(snapshot.bidQty + snapshot.askQty, 2) + "  ◆ ";
+  int offset = frame % static_cast<int>(tape.size());
+  return tape.substr(offset) + tape.substr(0, offset);
+}
+
 std::string sparkline(const std::vector<double> &values) {
   static const std::vector<std::string> marks = {"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"};
   if (values.empty()) {
@@ -102,6 +144,31 @@ std::string sparkline(const std::vector<double> &values) {
                                          index))];
   }
   return output;
+}
+
+std::string recentValues(const std::vector<double> &values, int count,
+                         int precision) {
+  if (values.empty()) {
+    return "awaiting data";
+  }
+
+  std::ostringstream output;
+  int start = std::max(0, static_cast<int>(values.size()) - count);
+  for (int i = start; i < static_cast<int>(values.size()); ++i) {
+    if (i > start) {
+      output << "  ";
+    }
+    output << formatDouble(values[i], precision);
+  }
+  return output.str();
+}
+
+std::string deltaLabel(double current, double previous) {
+  double delta = current - previous;
+  if (delta > 0) {
+    return "+" + formatDouble(delta, 8);
+  }
+  return formatDouble(delta, 8);
 }
 
 class MarketPlayback {
@@ -160,7 +227,10 @@ public:
   std::string product;
   std::string currentTime;
   MarketSnapshot snapshot;
+  std::vector<double> bidHistory;
+  std::vector<double> askHistory;
   std::vector<double> midHistory;
+  std::vector<double> spreadHistory;
   double previousBid = 0;
   double previousAsk = 0;
   double previousSpread = 0;
@@ -202,27 +272,93 @@ private:
 
     snapshot = next;
     if (snapshot.complete) {
+      bidHistory.push_back(snapshot.bidPrice);
+      askHistory.push_back(snapshot.askPrice);
       midHistory.push_back(snapshot.mid);
-      if (midHistory.size() > 56) {
+      spreadHistory.push_back(snapshot.spread);
+      if (midHistory.size() > 72) {
+        bidHistory.erase(bidHistory.begin());
+        askHistory.erase(askHistory.begin());
         midHistory.erase(midHistory.begin());
+        spreadHistory.erase(spreadHistory.begin());
       }
     }
   }
 };
 
 ftxui::Element metricPanel(const std::string &title, const std::string &value,
-                           const std::string &subtitle, ftxui::Color panelColor,
-                           bool flare) {
+                           const std::string &subtitle, const std::string &meter,
+                           ftxui::Color panelColor, bool flare) {
   using namespace ftxui;
   Decorator tone = color(panelColor);
-  Decorator fill = flare ? bgcolor(Color::RGB(55, 48, 8)) : bgcolor(Color::RGB(8, 10, 18));
+  Decorator fill = flare ? bgcolor(Color::RGB(65, 42, 12))
+                         : bgcolor(Color::RGB(8, 10, 18));
   return vbox({
              text(title) | bold | center | tone,
              separator(),
+             filler(),
              text(value) | bold | center | tone,
              text(subtitle) | center | color(Color::GrayLight),
+             text(meter) | bold | center | tone,
+             filler(),
          }) |
-         borderHeavy | fill | size(WIDTH, EQUAL, 24) | size(HEIGHT, EQUAL, 7);
+         borderHeavy | fill | size(WIDTH, EQUAL, 30) | size(HEIGHT, EQUAL, 10);
+}
+
+ftxui::Element priceReels(const MarketPlayback &playback) {
+  using namespace ftxui;
+  return vbox({
+             text("PRICE REELS") | bold | color(Color::RGB(255, 215, 0)),
+             hbox({text("BID    ") | bold | color(Color::RGB(0, 255, 160)),
+                   text(recentValues(playback.bidHistory, 5, 8)) |
+                       color(Color::RGB(180, 255, 225))}),
+             hbox({text("MID    ") | bold | color(Color::RGB(160, 255, 255)),
+                   text(recentValues(playback.midHistory, 5, 8)) |
+                       color(Color::RGB(210, 255, 255))}),
+             hbox({text("ASK    ") | bold | color(Color::RGB(255, 72, 160)),
+                   text(recentValues(playback.askHistory, 5, 8)) |
+                       color(Color::RGB(255, 190, 225))}),
+             hbox({text("SPREAD ") | bold | color(Color::RGB(255, 215, 0)),
+                   text(recentValues(playback.spreadHistory, 5, 8)) |
+                       color(Color::RGB(255, 235, 150))}),
+         }) |
+         borderRounded | bgcolor(Color::RGB(8, 9, 20));
+}
+
+ftxui::Element signalBurst(const MarketPlayback &playback, int frame) {
+  using namespace ftxui;
+  const MarketSnapshot &s = playback.snapshot;
+  std::string message = "MARKET FLOW HOLDING";
+  ftxui::Color burstColor = Color::RGB(160, 255, 255);
+
+  if (s.spread > playback.previousSpread) {
+    message = "SPREAD EXPANDED  " + deltaLabel(s.spread, playback.previousSpread);
+    burstColor = Color::RGB(255, 215, 0);
+  } else if (s.spread < playback.previousSpread) {
+    message = "SPREAD COMPRESSED  " + deltaLabel(s.spread, playback.previousSpread);
+    burstColor = Color::RGB(0, 255, 214);
+  } else if (s.askQty > s.bidQty) {
+    message = "ASK SIDE PRESSURE  " + formatDouble(s.askQty, 2);
+    burstColor = Color::RGB(255, 72, 160);
+  } else {
+    message = "BID SIDE PRESSURE  " + formatDouble(s.bidQty, 2);
+    burstColor = Color::RGB(0, 255, 160);
+  }
+
+  std::string burst = pulse(frame, 12) + "  " + message + "  " +
+                      pulse(frame + 3, 12);
+  return text(trimToWidth(burst, 86)) | bold | center | color(burstColor) |
+         bgcolor(Color::RGB(16, 11, 30)) | borderHeavy;
+}
+
+ftxui::Element arrowStack(const std::string &arrow) {
+  using namespace ftxui;
+  return vbox({
+             text(arrow) | bold | center,
+             text(arrow) | bold | center,
+             text(arrow) | bold | center,
+         }) |
+         color(Color::RGB(255, 215, 0)) | center;
 }
 
 ftxui::Element renderExchangeFloor(const MarketPlayback &playback, bool playing,
@@ -235,6 +371,7 @@ ftxui::Element renderExchangeFloor(const MarketPlayback &playback, bool playing,
   bool spreadFlare = s.complete && s.spread != playback.previousSpread;
   std::string status = playing ? "REPLAY STREAM ACTIVE" : "REPLAY STREAM PAUSED";
   std::string pressure = s.bidQty >= s.askQty ? "BID SIDE" : "ASK SIDE";
+  std::string tape = trimToWidth(rotatingTape(s, frame), 110);
 
   auto title = hbox({
                    text("  MERKELREX EXCHANGE FLOOR") | bold |
@@ -256,17 +393,28 @@ ftxui::Element renderExchangeFloor(const MarketPlayback &playback, bool playing,
                   }) |
                   bgcolor(Color::RGB(16, 18, 36));
 
+  auto ticker = hbox({
+                    text("  MARKET TAPE  ") | bold |
+                        color(Color::RGB(255, 215, 0)),
+                    text(tape) | bold | color(Color::RGB(0, 255, 214)),
+                    filler(),
+                }) |
+                bgcolor(Color::RGB(12, 8, 28));
+
   auto panels = hbox({
                     metricPanel("BID LANE", formatDouble(s.bidPrice, 8),
                                 "depth " + formatDouble(s.bidQty, 2),
+                                bar(s.bidQty, maxQty, 12),
                                 Color::RGB(0, 255, 160), bidFlare),
-                    text("  <<<  ") | bold | center | color(Color::RGB(255, 215, 0)),
+                    arrowStack("<<<"),
                     metricPanel("SPREAD LANE", formatDouble(s.spread, 8),
                                 "mid " + formatDouble(s.mid, 8),
-                                Color::RGB(255, 215, 0), spreadFlare),
-                    text("  >>>  ") | bold | center | color(Color::RGB(255, 215, 0)),
+                                pulse(frame, 12), Color::RGB(255, 215, 0),
+                                spreadFlare),
+                    arrowStack(">>>"),
                     metricPanel("ASK LANE", formatDouble(s.askPrice, 8),
                                 "depth " + formatDouble(s.askQty, 2),
+                                bar(s.askQty, maxQty, 12),
                                 Color::RGB(255, 72, 160), askFlare),
                 }) |
                 center;
@@ -285,6 +433,8 @@ ftxui::Element renderExchangeFloor(const MarketPlayback &playback, bool playing,
       text("PRICE RUNWAY") | bold | color(Color::RGB(255, 215, 0)),
       text("◆ " + sparkline(playback.midHistory) + " ◆") | bold |
           color(Color::RGB(0, 255, 214)),
+      text("◇ " + sparkline(playback.spreadHistory) + " ◇") | bold |
+          color(Color::RGB(255, 215, 0)),
   });
 
   auto intensity = vbox({
@@ -294,25 +444,35 @@ ftxui::Element renderExchangeFloor(const MarketPlayback &playback, bool playing,
                 color(Color::RGB(255, 215, 0))}),
   });
 
-  auto controls = text(" SPACE Play/Pause    N Next Tick    F/S Speed    R Auto    Q Exit ") |
-                  bold | center | bgcolor(Color::RGB(20, 14, 35)) |
-                  color(Color::RGB(230, 230, 255));
+  auto controlDeck = vbox({
+      text("CONTROL DECK") | bold | center | color(Color::RGB(255, 215, 0)),
+      text(" [SPACE] Play/Pause   [N] Step   [F] Accelerate   [S] Decelerate   [R] Auto Cadence   [Q] Exit ") |
+          bold | center | color(Color::RGB(230, 230, 255)),
+  }) | bgcolor(Color::RGB(20, 14, 35));
 
-  return vbox({
-             title,
-             subtitle,
-             separatorHeavy(),
-             filler(),
-             panels,
-             filler(),
-             depth,
-             filler(),
-             runway,
-             filler(),
-             intensity,
-             filler(),
-             separatorHeavy(),
-             controls,
+  auto core = vbox({
+                  title,
+                  subtitle,
+                  ticker,
+                  separatorHeavy(),
+                  signalBurst(playback, frame),
+                  panels,
+                  hbox({
+                      depth | flex,
+                      separator(),
+                      priceReels(playback) | flex,
+                  }),
+                  runway,
+                  intensity,
+                  separatorHeavy(),
+                  controlDeck,
+              }) |
+              flex;
+
+  return hbox({
+             animatedRail(frame, 23, Color::RGB(255, 85, 255)),
+             core,
+             animatedRail(frame + 4, 23, Color::RGB(0, 255, 214)),
          }) |
          borderDouble | bgcolor(Color::RGB(4, 5, 13)) |
          color(Color::RGB(220, 230, 255));
