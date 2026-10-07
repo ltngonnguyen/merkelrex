@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstdio>
 #include <iomanip>
+#include <iostream>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -483,6 +484,11 @@ ftxui::Element renderExchangeFloor(const MarketPlayback &playback, bool playing,
 int runMerkelTui() {
   OrderBook orderBook{"ADAUSD_230929-bookTicker-2023-09-29.zip", false};
   if (orderBook.isEmpty()) {
+    std::cerr << "No market data found for the TUI. Download a Binance "
+                 "bookTicker zip into the project root (see README Data "
+                 "section), or try the zero-download demo: "
+                 "./build/merkelrex replay"
+              << std::endl;
     return 1;
   }
 

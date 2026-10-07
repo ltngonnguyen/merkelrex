@@ -39,8 +39,10 @@ void MerkelMain::init() {
   currentTime = orderBook.getEarliestTime();
 
   if (orderBook.isEmpty()) {
-    std::cout << "No order data was loaded. Check that the CSV file exists and "
-                 "has real market rows, not a Git LFS pointer."
+    std::cout << "No order data was loaded. The interactive menu expects a "
+                 "Binance bookTicker zip in the project root (see README Data "
+                 "section for the download link). "
+                 "For a zero-download demo, run: ./build/merkelrex replay"
               << std::endl;
     return;
   }

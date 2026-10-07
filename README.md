@@ -1,67 +1,48 @@
-# Merkelrex: C++ Orderbook Simulator
+# Merkelrex: C++ Limit-Order Matching Engine + Market Data Replay
 
 ![Merkelrex cover](assets/merkelrex-cover.png)
 
-Merkelrex started as my CM2005 Object Oriented Programming mid-term project. The original assignment was built around a small crypto exchange simulator: read orderbook data from CSV, let the user inspect market stats, place bids and asks, move through timestamps, and draw text-based charts in the terminal.
+Merkelrex is a C++17 limit-order matching engine with a replayable order flow, built on top of an earlier orderbook simulator. The core is price-time-priority matching with partial fills, order cancellation, fixed-point prices, book snapshots (best bid/ask, spread, mid, depth, imbalance), and text/JSON replay output. Around that core there are extras for exploring market data: Binance `bookTicker` support and terminal visualizations.
 
-I kept working on it after the coursework because I liked the problem more than I expected. The current direction is to move away from the original bundled coursework CSV and make the app useful with real Binance public data. The first Binance format supported is COIN-M futures `bookTicker`, which gives historical best bid/ask price and quantity updates.
+It started as my CM2005 Object Oriented Programming mid-term project (a small CSV exchange simulator). I kept building after the coursework because the matching problem interested me more than expected, and moved the data story onto real Binance public data (COIN-M futures `bookTicker`: historical best bid/ask price and quantity updates).
 
-## What The App Does Right Now
+## Quickstart (no downloads needed)
 
-There are three ways to run it.
+```bash
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+./build/merkelrex replay
+./build/merkelrex replay --json | head -c 600
+```
 
-The first is the original interactive app:
+`replay` reads the committed `sample_orders.csv`, submits/cancels orders through the matching engine, prints trades, and shows the final book state. `--json` emits the same run as machine-readable JSON for scripts. The older alias `match-demo` still works.
+
+## Ways to run it
+
+**Primary: matching-engine replay (backend core).**
+
+```bash
+./build/merkelrex replay
+./build/merkelrex replay --json
+./build/merkelrex replay path/to/orders.csv
+```
+
+**Extra: interactive menu (legacy visualization path).** Requires a Binance `bookTicker` zip in the project root (see Data section):
 
 ```bash
 ./build/merkelrex
 ```
 
-That opens the menu-driven Merkelrex terminal app. On this branch it loads a local Binance `bookTicker` zip by default:
+From the menu you can inspect exchange stats, enter asks/bids, print the wallet, draw candlestick and volume/notional graphs, step timeframes, and auto-play market data. Without the data file it prints where to get it and points back to `replay`.
 
-```text
-ADAUSD_230929-bookTicker-2023-09-29.zip
-```
-
-From the menu you can:
-
-- print help
-- inspect exchange stats for the current timestamp
-- enter an ask
-- enter a bid
-- print the wallet
-- draw a candlestick graph
-- draw a volume/notional graph
-- move to the next timeframe
-- play market data continuously with an automatically chosen tick delay
-- quit cleanly
-
-The second path replays a small order file through the newer matching engine:
-
-```bash
-./build/merkelrex replay
-```
-
-That path does not replace the original app. It is a smaller, cleaner harness I added later so I could work on matching logic without going through the interactive menu every time. It reads `sample_orders.csv`, submits/cancels orders, prints trades, and shows the final book state.
-
-The third path opens the fullscreen market terminal:
+**Extra: fullscreen market terminal.** Also requires the Binance zip:
 
 ```bash
 ./build/merkelrex tui
 ```
 
-This mode uses FTXUI to render the Binance `bookTicker` replay as an in-place Exchange Floor dashboard. It starts playback automatically, hides the old scrolling tick output, and exposes keyboard controls directly in the footer: space to pause/resume, `n` to step, `f`/`s` to adjust speed, `r` to reset cadence, and `q` to exit.
-
-For scripts, the replay command can also output JSON:
-
-```bash
-./build/merkelrex replay --json
-```
-
-The older command name still works as an alias:
-
-```bash
-./build/merkelrex match-demo
-```
+This mode uses FTXUI to render the `bookTicker` replay as an in-place Exchange Floor dashboard (space pause/resume, `n` step, `f`/`s` speed, `r` reset cadence, `q` exit). Without the data file it exits with the download pointer instead of a blank screen.
 
 ## Screenshots
 
@@ -78,41 +59,35 @@ Volume graph comparing BTC, DOGE, and ETH volume in USDT terms:
 ## Project Layout
 
 ```text
-main.cpp                  Entry point, interactive app routing, replay command
-MerkelMain.*              Original interactive menu workflow
+main.cpp                  Entry point, replay command routing, interactive/TUI modes
+MatchingEngine.*          Limit-order matching engine (price-time priority, fills, cancel)
+FixedPoint.*              8-decimal fixed-point value type used by the matching engine
+Order.* / Trade.*         Matching-engine domain objects
+sample_orders.csv         Committed replay file, works with zero downloads
+tests/orderbook_tests.cpp Small no-dependency C++ test runner
+CSVReader.*               CSV parsing and row validation, Binance bookTicker adapter
 OrderBook.*               Historical market-data storage, filtering, matching, OHLCV logic
 OrderBookEntry.*          Single historical bid/ask/trade row
-CSVReader.*               CSV parsing and row validation
+MerkelMain.*              Legacy interactive menu workflow (needs Binance zip)
+MerkelTui.*               Fullscreen FTXUI market terminal (needs Binance zip)
 Wallet.*                  User balance tracking
-Candlestick.*             OHLC data model
-Volume.*                  Volume data model
+Candlestick.* / Volume.*  OHLC and volume data models
 Canvas.*                  Terminal drawing surface
 CandlestickGraph.*        Terminal candlestick renderer
 VolumeGraph.*             Terminal volume renderer
-MatchingEngine.*          Newer limit-order matching engine
-FixedPoint.*              8-decimal fixed-point value type used by the newer engine
-Order.* / Trade.*         Newer matching-engine domain objects
-sample_orders.csv         Small replay file for matching-engine work
-tests/orderbook_tests.cpp Small no-dependency C++ test runner
 assets/                   README images and original design sketches
 ```
 
 ## Build
 
-The project uses CMake and C++17.
+The project uses CMake and C++17. CI runs configure, build, tests, and a replay smoke test on every push/PR (`.github/workflows/ci.yml`).
 
 ```bash
 cmake -S . -B build
 cmake --build build
 ```
 
-Run the interactive app:
-
-```bash
-./build/merkelrex
-```
-
-Run the replay harness:
+Run the matching-engine replay (no downloads needed):
 
 ```bash
 ./build/merkelrex replay
@@ -134,6 +109,13 @@ Run the tests:
 
 ```bash
 ctest --test-dir build --output-on-failure
+```
+
+Run the legacy interactive menu or fullscreen TUI (both need the Binance zip from the Data section):
+
+```bash
+./build/merkelrex
+./build/merkelrex tui
 ```
 
 ## Data
